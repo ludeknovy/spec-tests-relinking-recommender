@@ -1,11 +1,5 @@
-import spacy
-
-from spacy.errors import ModelsWarning
-import warnings
 import sys
-
-warnings.filterwarnings("ignore", category=ModelsWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
+import spacy
 
 
 class SentencesSimilarityAnalyser:
@@ -18,7 +12,10 @@ class SentencesSimilarityAnalyser:
 
     @staticmethod
     def print_recommended_sentence_info(similarity, sentence_candidate_in_latest_spec):
-        print("---> P (%.2f): %s" % (similarity, sentence_candidate_in_latest_spec))
+        print("---> P ({similarity:.2}): {sentence}".format(
+            similarity=similarity,
+            sentence=sentence_candidate_in_latest_spec
+        ))
 
     def compute_vectors_by_latest_spec(self):
         for path in self.latest_spec_sentences:
@@ -28,62 +25,80 @@ class SentencesSimilarityAnalyser:
 
                 self.latest_spec_sentence_vectors[path].append(self.nlp(sentence))
 
-    def print_comparison_results(self, spec_sentences_info, sentence_location):
+    def print_comparison_results(self, spec_sentences_info, sentence_location, test_path):
         (sections_hierarchy, sentence_number) = sentence_location
         (spec_version, sentences) = spec_sentences_info
 
         sentence_index = sentence_number - 1
 
-        print("------------------------------------------")
+        is_sentence_location_in_actual_sentences_exist =\
+            sections_hierarchy in sentences and len(sentences[sections_hierarchy]) > sentence_number
+        is_sentence_location_in_expected_sentences_exist = \
+            sections_hierarchy in self.latest_spec_sentences \
+            and len(self.latest_spec_sentences[sections_hierarchy]) > sentence_number
 
-        print("\"%s\"" % (sections_hierarchy + "," + str(sentence_number)), file=sys.stderr)
+        if is_sentence_location_in_actual_sentences_exist and is_sentence_location_in_expected_sentences_exist:
+            expected_sentence = self.latest_spec_sentences[sections_hierarchy][sentence_index]
+            actual_sentence = sentences[sections_hierarchy][sentence_index]
+            if expected_sentence == actual_sentence:
+                return
 
-        if sections_hierarchy in sentences and len(sentences[sections_hierarchy]) > sentence_number:
-            print("---> E: " + sentences[sections_hierarchy][sentence_index])
+        print("------------------------------------------\n{test_path}".format(test_path=test_path))
+
+        if is_sentence_location_in_actual_sentences_exist:
+            print("---> E: {expected_sentence}"
+                  .format(expected_sentence=sentences[sections_hierarchy][sentence_index]))
         else:
-            print("Invalid the spec version in the test (sentence not found in %s)" % spec_version, file=sys.stderr)
+            print("Invalid the spec version in the test (sentence not found in {spec_version})"
+                  .format(spec_version=spec_version), file=sys.stderr)
             return
 
-        if sections_hierarchy in self.latest_spec_sentences and len(
-                self.latest_spec_sentences[sections_hierarchy]) > sentence_number:
-            print("---> A: " + self.latest_spec_sentences[sections_hierarchy][sentence_index])
+        if is_sentence_location_in_expected_sentences_exist:
+            print("---> A: {actual_sentence}"
+                  .format(actual_sentence=self.latest_spec_sentences[sections_hierarchy][sentence_index]))
         else:
-            print("---> A: sentence not found in %s spec version" % self.latest_spec_version, file=sys.stderr)
+            print("---> A: sentence not found in {spec_version} spec version"
+                  .format(spec_version=self.latest_spec_version), file=sys.stderr)
 
     def search_most_similar_sentence(self, spec_sentences_info, sentence_location):
         (sections_hierarchy, sentence_number) = sentence_location
         (spec_version, sentences) = spec_sentences_info
 
         sentence_index = sentence_number - 1
+        is_sentence_location_in_actual_sentences_exist = \
+            sections_hierarchy in sentences and len(sentences[sections_hierarchy]) > sentence_number
+        is_sentence_location_in_expected_sentences_exist = \
+            sections_hierarchy in self.latest_spec_sentences \
+            and len(self.latest_spec_sentences[sections_hierarchy]) > sentence_number
 
-        exist_in_spec_sentences = sections_hierarchy in sentences
-        exist_in_latest_spec_sentences = sections_hierarchy in sentences
+        if is_sentence_location_in_actual_sentences_exist and is_sentence_location_in_expected_sentences_exist:
+            expected_sentence = self.latest_spec_sentences[sections_hierarchy][sentence_index]
+            actual_sentence = sentences[sections_hierarchy][sentence_index]
 
-        if exist_in_spec_sentences and exist_in_latest_spec_sentences and len(sentences[sections_hierarchy]) > sentence_number and len(self.latest_spec_sentences[sections_hierarchy]) > sentence_number and sentences[sections_hierarchy][sentence_index] == self.latest_spec_sentences[sections_hierarchy][sentence_index]:
-            return
+            if expected_sentence == actual_sentence:
+                return
 
-        if exist_in_spec_sentences and exist_in_latest_spec_sentences and len(sentences[sections_hierarchy]) > sentence_number and len(self.latest_spec_sentences[sections_hierarchy]) > sentence_number and sentences[sections_hierarchy][sentence_index] != self.latest_spec_sentences[sections_hierarchy][sentence_index]:
-            if not sections_hierarchy + "," + str(sentence_index) in self.similarities:
-                search_doc = self.nlp(sentences[sections_hierarchy][sentence_index])
-                max_similarity = (0, "")
+            similarity_key = "{sections},{sentence_index}".format(
+                sections=sections_hierarchy,
+                sentence_index=str(sentence_index)
+            )
 
-                for path in self.latest_spec_sentences:
-                    for index, sentence in enumerate(self.latest_spec_sentences[path]):
+            if similarity_key in self.similarities:
+                return self.similarities[similarity_key]
 
-                        main_doc = self.latest_spec_sentence_vectors[path][index]
+            sentence_vector = self.nlp(sentences[sections_hierarchy][sentence_index])
+            another_sentence_with_max_similarity = (0, "")
 
-                        sim = search_doc.similarity(main_doc)
-                        if sim > max_similarity[0]:
-                            max_similarity = (sim, sentence)
+            for path in self.latest_spec_sentences:
+                for index, sentence in enumerate(self.latest_spec_sentences[path]):
+                    sentence_vector_in_latest_spec = self.latest_spec_sentence_vectors[path][index]
+                    similarity = sentence_vector.similarity(sentence_vector_in_latest_spec)
 
-                similarity = max_similarity[0]
-                most_similar_sentence_in_latest_spec = max_similarity[1]
-                self.similarities[sections_hierarchy + "," + str(sentence_index)] = max_similarity
-            else:
-                similarity_components = self.similarities[sections_hierarchy + "," + str(sentence_index)]
-                similarity = similarity_components[0]
-                most_similar_sentence_in_latest_spec = similarity_components[1]
+                    if similarity > another_sentence_with_max_similarity[0]:
+                        another_sentence_with_max_similarity = (similarity, sentence)
 
-            return similarity, most_similar_sentence_in_latest_spec
+            self.similarities[similarity_key] = another_sentence_with_max_similarity
+
+            return another_sentence_with_max_similarity
         else:
             return None

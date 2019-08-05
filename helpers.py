@@ -1,0 +1,1 @@
+spec_version_pattern = "(?P<version>\d+\.\d+)-(?P<build_number>[1-9]\d*)"

@@ -1,10 +1,14 @@
-from SpecSentencesLoader import SpecSentencesLoader
+import re
+
+from SpecSentences.SpecSentencesLoader import SpecSentencesLoader
+from helpers import spec_version_pattern
 
 
 class SpecSentencesStorage:
     specSentences = {}
     latest_key = "latest"
     loader = SpecSentencesLoader()
+    spec_version_regex = re.compile(spec_version_pattern)
 
     def load(self, version_number, build_number):
         version = version_number + build_number
@@ -17,9 +21,9 @@ class SpecSentencesStorage:
         if version in self.specSentences:
             return self.specSentences[version]
 
-        version_components = version.split('-')
+        matches = self.spec_version_regex.search(version)
 
-        self.specSentences[version] = self.load(version_components[0], version_components[1])
+        self.specSentences[version] = self.load(matches.group("version"), matches.group("build_number"))
 
         return self.specSentences[version]
 
@@ -27,6 +31,7 @@ class SpecSentencesStorage:
         if self.latest_key in self.specSentences:
             return self.specSentences[self.latest_key]
 
-        last_spec_version = self.loader.get_last_spec_version()
+        (version, build_number) = self.loader.get_last_spec_version()
 
-        return '-'.join(last_spec_version), self.load(last_spec_version[0], last_spec_version[1])
+        return "{version}-{build_number}".format(version=version, build_number=build_number),\
+               self.load(version, build_number)
