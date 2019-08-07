@@ -1,22 +1,19 @@
-import re
+import sys
 
 from SpecTests.TestsProvider import TestsProvider
 from SpecSentences.SpecSentencesStorage import SpecSentencesStorage
 from SpecSentences.SentencesSimilarityAnalyser import SentencesSimilarityAnalyser
 from RecommendedApplying.ApplyingRecommendedSentencesDialog import ApplyingRecommendedSentencesDialog
 
-# pip3 install spacy
-# python3 -m spacy download en_core_web_lg
-# pip3 install lxml
-# pip3 install sortedcontainers
+if len(sys.argv) < 2:
+    print("Please, specify the Kotlin compiler repo path as a program argument.")
+    exit()
 
-test_path_regex = re.compile("linked/(?P<sections>.*?)/p-(?P<paragraph>[1-9]\d*)/"
-                             "(?P<test_type>pos|neg)/(?P<sentence_number>[1-9]\d*)\.(?P<test_number>[1-9]\d*)\.kt$")
+compiler_repo_path = sys.argv[1]
 
 
-def get_sentence_location(test_path):
-    test_path_components = test_path_regex.search(test_path)
-    paragraph_number = test_path_components.group("paragraph")
+def get_sentence_location(test_path_components):
+    paragraph_number = test_path_components.group("paragraph_number")
     sections_path = test_path_components.group("sections").replace("/", ",").lower() + "," + str(paragraph_number)
     sentence_number = int(test_path_components.group("sentence_number"))
     test_type = test_path_components.group("test_type")
@@ -26,29 +23,37 @@ def get_sentence_location(test_path):
 
 def analyze_test_files(tests):
     sentences_storage = SpecSentencesStorage()
-    similarity_analyser = SentencesSimilarityAnalyser(sentences_storage.get_latest())
+    (latest_spec_version, latest_spec) = sentences_storage.get_latest()
+    recommended_applier = ApplyingRecommendedSentencesDialog(compiler_repo_path, latest_spec_version)
+    similarity_analyser = SentencesSimilarityAnalyser((latest_spec_version, latest_spec))
 
     similarity_analyser.compute_vectors_by_latest_spec()
 
     for test_path, spec_version in tests.items():
-        sentence_location = get_sentence_location(test_path)
+        test_path_components = recommended_applier.test_path_regex.search(test_path)
+        sentence_location = get_sentence_location(test_path_components=test_path_components)
         spec_sentences_info = (spec_version, sentences_storage.get(spec_version))
 
         similarity_analyser.print_comparison_results(spec_sentences_info, sentence_location, test_path)
 
-        search_result = similarity_analyser.search_most_similar_sentence(spec_sentences_info, sentence_location)
+        most_similar_sentences = similarity_analyser.search_most_similar_sentences(spec_sentences_info, sentence_location)
 
-        if search_result:
+        if most_similar_sentences:
             path_components =\
-                ApplyingRecommendedSentencesDialog.part_test_path_before_sections_regex.search(test_path)
+                recommended_applier.part_test_path_before_sections_regex.search(test_path)
 
             test_path_prefix = path_components.group("part_test_path")
             remaining_path = path_components.group("remaining_path")
-            ApplyingRecommendedSentencesDialog.print_recommended_sentence_info(search_result, test_path_prefix, sentence_location)
-            ApplyingRecommendedSentencesDialog.waiting_for_type(sentence_location, (test_path_prefix, remaining_path), compiler_repo_path)
+            (sections_path, sentence_number, _) = sentence_location
+
+            recommended_applier.print_and_request_action_for_recommended_sentence(
+                most_similar_sentences,
+                (test_path_prefix, remaining_path, test_path_components.group("test_type")),
+                (sections_path, sentence_number),
+                spec_version
+            )
 
 
-compiler_repo_path = "/Users/victor.petukhov/IdeaProjects/kotlin-2"
-test_provider = TestsProvider(compiler_repo_path)
-
-analyze_test_files(test_provider.get_tests_map())
+analyze_test_files(
+    tests=TestsProvider(compiler_repo_path).get_tests_map()
+)

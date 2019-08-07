@@ -17,13 +17,6 @@ class SentencesSimilarityAnalyser:
     def __init__(self, spec_info):
         (self.latest_spec_version, self.latest_spec_sentences) = spec_info
 
-    def get_next_test_number_by_path(self, path):
-        test_number = 1
-        while os.path.isfile("{path_prefix}.{test_number}.kt".format(path_prefix=path,test_number=test_number)):
-            test_number += 1
-
-        return test_number
-
     def compute_vectors_by_latest_spec(self):
         for path in self.latest_spec_sentences:
             for sentence in self.latest_spec_sentences[path]:
@@ -50,15 +43,19 @@ class SentencesSimilarityAnalyser:
             if expected_sentence == actual_sentence:
                 return
 
-        print("==========================================\n{test_path}\n––––––––––––––––––––––––––––––––––––––––––"
-              .format(test_path=test_path))
+        print("=========================================")
+        print("Comparing by spec {spec_version_1} (actual) to {spec_version_2} (expected)"
+              .format(test_path=test_path, spec_version_1=spec_version, spec_version_2=self.latest_spec_version))
+        print("–––––––––––––––––––––––––––––––––––––––––")
 
         if is_sentence_location_in_actual_sentences_exist:
             print("–––> A: {actual_sentence}"
                   .format(actual_sentence=sentences[sections_hierarchy][sentence_index]))
+            print("        ––> Path: {test_path}".format(test_path=test_path))
         else:
             print("Invalid the spec version in the test (sentence not found in {spec_version})"
                   .format(spec_version=spec_version), file=sys.stderr)
+            print("        ––> Path: {test_path}".format(test_path=test_path))
             return
 
         if is_sentence_location_in_expected_sentences_exist:
@@ -68,7 +65,7 @@ class SentencesSimilarityAnalyser:
             print("–––> E: sentence not found in {spec_version} spec version"
                   .format(spec_version=self.latest_spec_version), file=sys.stderr)
 
-    def search_most_similar_sentence(self, spec_sentences_info, sentence_location):
+    def search_most_similar_sentences(self, spec_sentences_info, sentence_location):
         (sections_hierarchy, sentence_number, test_type) = sentence_location
         (spec_version, sentences) = spec_sentences_info
 
@@ -106,15 +103,10 @@ class SentencesSimilarityAnalyser:
                     similarity = sentence_vector.similarity(sentence_vector_in_latest_spec)
 
                     location_components = sentence_location.split(',')
-                    new_test_path = "{sections}/p-{paragraph_number}/{test_type}/{sentence_number}".format(
-                        test_type=test_type,
+                    new_test_path = "{sections}/p-{paragraph_number}/test_type/{sentence_number}".format(
                         sections='/'.join(location_components[0:-1]),
                         paragraph_number=location_components[-1],
                         sentence_number=str(index + 1)
-                    )
-                    new_test_path = "{path}.{test_number}.kt".format(
-                        path=new_test_path,
-                        test_number=self.get_next_test_number_by_path(new_test_path)
                     )
 
                     if len(most_similar_five_sentences) > self.recommended_sentences_number:
