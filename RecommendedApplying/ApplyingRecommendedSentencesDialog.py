@@ -14,7 +14,7 @@ class ApplyingRecommendedSentencesDialog:
     test_path_short_regex = re.compile("(?P<sections>.*?)/p-(?P<paragraph_number>[1-9]\d*)/(?P<test_type>pos|neg)/"
                                        "(?P<sentence_number>[1-9]\d*)(?:\.(?P<test_number>[1-9]\d*)\.kt)?$")
     answers = {}
-    spec_place_template = " * PLACE: {sections} -> paragraph {paragraph_number} -> sentence {sentence_number}"
+    spec_place_template = " * MAIN LINK: {sections} -> paragraph {paragraph_number} -> sentence {sentence_number}"
     spec_version_template = " * SPEC VERSION: {version}"
     test_number_template = " * NUMBER: {test_number}"
     test_number_regex = r' \* NUMBER: [1-9]\d*'
