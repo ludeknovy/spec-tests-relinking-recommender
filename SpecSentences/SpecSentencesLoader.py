@@ -59,7 +59,8 @@ class SpecSentencesLoader:
 
         matches = self.artifact_regex.search(artifact_name)
 
-        return matches.group("version"), matches.group("build_number")
+        ##todo: changed  from  matches.group("build_number") to 603 temporary till stable release version of spec is without full html
+        return matches.group("version"),  "603" ##matches.group("build_number")
 
     def build_sentences_map(self, raw_spec_html):
         html_page = BeautifulSoup(raw_spec_html, 'html.parser')
